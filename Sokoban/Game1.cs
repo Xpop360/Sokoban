@@ -3,6 +3,7 @@ using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using System.IO;
 using System.Linq;
+using System;
 
 namespace Sokoban
 {
@@ -15,6 +16,7 @@ namespace Sokoban
         int width, height;
         int size = 64; // tamanho (largura e altura) das imagens usadas
         Texture2D wall, crate, sokoban, point;
+        Vector2 position; // sokoban position
 
         public Game1()
         {
@@ -27,6 +29,9 @@ namespace Sokoban
             board = readSokoban(@"Content\level1.sok");
             width = board.GetLength(0);
             height = board.GetLength(1);
+
+            // remove Sokoban from board, and return coordinates
+            position = positionSokoban();
 
             graphics.PreferredBackBufferHeight = height * size;
             graphics.PreferredBackBufferWidth = width * size;
@@ -64,9 +69,56 @@ namespace Sokoban
             if (GamePad.GetState(PlayerIndex.One).Buttons.Back == ButtonState.Pressed || Keyboard.GetState().IsKeyDown(Keys.Escape))
                 Exit();
 
-            // TODO: Add your update logic here
+            // sair se jogo acabou
+            if (isWin()) Exit();
+
+            KeyboardState keys = Keyboard.GetState();
+            Vector2 movement = Vector2.Zero;
+            if (keys.IsKeyDown(Keys.Down))
+                movement = Vector2.UnitY;
+            else if (keys.IsKeyDown(Keys.Up))
+                movement = -Vector2.UnitY;
+            else if (keys.IsKeyDown(Keys.Left))
+                movement = -Vector2.UnitX;
+            else if (keys.IsKeyDown(Keys.Right))
+                movement = Vector2.UnitX;
+
+            if (isCrate(position + movement))
+            {
+                if (!isCrate(position + 2*movement) &&
+                    !isWall(position + 2*movement))
+                {
+                    moveCrate(position + movement, position + 2 * movement);
+                    position = position + movement;
+                }
+            }
+            else if (!isWall(position + movement))
+            {
+                position = position + movement;
+            }
 
             base.Update(gameTime);
+        }
+
+        void moveCrate(Vector2 origem, Vector2 destino)
+        {
+            // 1. remover da origem
+            if (board[(int)origem.X, (int)origem.Y] == '*')
+                board[(int)origem.X, (int)origem.Y] = '.';
+            else
+                board[(int)origem.X, (int)origem.Y] = ' ';
+
+            // 2. colocar no destino
+            if (board[(int)destino.X, (int)destino.Y] == '.')
+                board[(int)destino.X, (int)destino.Y] = '*';
+            else
+                board[(int)destino.X, (int)destino.Y] = '$';
+        }
+
+        bool isCrate(Vector2 pos)
+        {
+            return (board[(int)pos.X, (int)pos.Y] == '$')
+                || (board[(int)pos.X, (int)pos.Y] == '*');
         }
 
         /// <summary>
@@ -87,11 +139,9 @@ namespace Sokoban
                         case '.':
                             spriteBatch.Draw(point, new Vector2(x * size, y * size), Color.White);
                             break;
+                        case '*':
                         case '$':
                             spriteBatch.Draw(crate, new Vector2(x * size, y * size), Color.White);
-                            break;
-                        case '@':
-                            spriteBatch.Draw(sokoban, new Vector2(x * size, y * size), Color.White);
                             break;
                         case '#':
                             spriteBatch.Draw(wall, new Vector2(x * size, y * size), Color.White);
@@ -101,11 +151,18 @@ namespace Sokoban
                     }
                 }
             }
+            spriteBatch.Draw(sokoban, position * size, Color.White);
             spriteBatch.End();
 
 
             base.Draw(gameTime);
         }
+
+        bool isWall(Vector2 coord)
+        {
+            return board[(int)coord.X, (int)coord.Y] == '#';
+        }
+
 
 
         /*
@@ -156,5 +213,16 @@ namespace Sokoban
             }
             return Vector2.Zero; // em principio, nunca executado
         }
+
+        // Is the board complete? (no dots!)
+        bool isWin()
+        {
+            for (int x = 0; x < width; x++)
+                for (int y = 0; y < height; y++)
+                    if (board[x, y] == '.')
+                        return false;
+            return true;
+        }
+
     }
 }
