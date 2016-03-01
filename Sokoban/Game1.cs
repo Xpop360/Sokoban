@@ -12,11 +12,24 @@ namespace Sokoban
         GraphicsDeviceManager graphics;
         SpriteBatch spriteBatch;
 
+        bool win = false;
+
         char[,] board;
         int width, height;
         int size = 64; // tamanho (largura e altura) das imagens usadas
-        Texture2D wall, crate, sokoban, point;
+        Texture2D wall, crate, sokoban, point, sand, pixel;
         Vector2 position; // sokoban position
+
+        float scale = 0.75f; // Escala 
+        SpriteFont arialBlack20;
+
+        int nrMovements = 0;
+
+        int nrLevels = 2;
+        int curLevel = 1;
+
+        float movementTimer = 0f;
+
 
         public Game1()
         {
@@ -26,20 +39,31 @@ namespace Sokoban
         
         protected override void Initialize()
         {
-            board = readSokoban(@"Content\level1.sok");
+            pixel = new Texture2D(GraphicsDevice, 1, 1);
+            pixel.SetData<Color>(new Color[] { Color.Black });
+
+            loadLevel();
+            base.Initialize();
+        }
+
+        void loadLevel()
+        {
+            board = readSokoban(@"Content\level" + curLevel + ".sok");
             width = board.GetLength(0);
             height = board.GetLength(1);
 
             // remove Sokoban from board, and return coordinates
             position = positionSokoban();
 
-            graphics.PreferredBackBufferHeight = height * size;
-            graphics.PreferredBackBufferWidth = width * size;
+            nrMovements = 0;
+            win = false;
+
+            graphics.PreferredBackBufferHeight = 
+                (int)(scale*(30 + height * size));
+            graphics.PreferredBackBufferWidth =
+                (int)(scale * width * size);
             graphics.ApplyChanges();
-
-            base.Initialize();
         }
-
         protected override void LoadContent()
         {
             spriteBatch = new SpriteBatch(GraphicsDevice);
@@ -48,55 +72,76 @@ namespace Sokoban
             crate = Content.Load<Texture2D>("crate");
             sokoban = Content.Load<Texture2D>("sokoban");
             point = Content.Load<Texture2D>("point");
+            sand = Content.Load<Texture2D>("sand");
+
+            arialBlack20 = Content.Load<SpriteFont>("ArialBlack_20");
         }
 
-        /// <summary>
-        /// UnloadContent will be called once per game and is the place to unload
-        /// game-specific content.
-        /// </summary>
         protected override void UnloadContent()
         {
             // TODO: Unload any non ContentManager content here
         }
 
-        /// <summary>
-        /// Allows the game to run logic such as updating the world,
-        /// checking for collisions, gathering input, and playing audio.
-        /// </summary>
-        /// <param name="gameTime">Provides a snapshot of timing values.</param>
         protected override void Update(GameTime gameTime)
         {
             if (GamePad.GetState(PlayerIndex.One).Buttons.Back == ButtonState.Pressed || Keyboard.GetState().IsKeyDown(Keys.Escape))
                 Exit();
 
-            // sair se jogo acabou
-            if (isWin()) Exit();
+            movementTimer += (float)gameTime.ElapsedGameTime.TotalSeconds;
+
+            if (isWin())
+            {
+                if (curLevel < nrLevels)
+                {
+                    curLevel++;
+                    loadLevel();
+                }
+                else
+                    win = true;
+            }
 
             KeyboardState keys = Keyboard.GetState();
-            Vector2 movement = Vector2.Zero;
-            if (keys.IsKeyDown(Keys.Down))
-                movement = Vector2.UnitY;
-            else if (keys.IsKeyDown(Keys.Up))
-                movement = -Vector2.UnitY;
-            else if (keys.IsKeyDown(Keys.Left))
-                movement = -Vector2.UnitX;
-            else if (keys.IsKeyDown(Keys.Right))
-                movement = Vector2.UnitX;
-
-            if (isCrate(position + movement))
+            if (keys.IsKeyDown(Keys.R))
             {
-                if (!isCrate(position + 2*movement) &&
-                    !isWall(position + 2*movement))
+                loadLevel();
+            }
+
+            // Se passou mais que 1/10 segundo desde ultima tecla
+            if (!win && movementTimer > 1f / 10f)
+            {
+                Vector2 movement = Vector2.Zero;
+                if (keys.IsKeyDown(Keys.Down))
+                    movement = Vector2.UnitY;
+                else if (keys.IsKeyDown(Keys.Up))
+                    movement = -Vector2.UnitY;
+                else if (keys.IsKeyDown(Keys.Left))
+                    movement = -Vector2.UnitX;
+                else if (keys.IsKeyDown(Keys.Right))
+                    movement = Vector2.UnitX;
+
+                // Se utilizador carregou numa tecla
+                if (movement != Vector2.Zero)
                 {
-                    moveCrate(position + movement, position + 2 * movement);
-                    position = position + movement;
+                    // reset timer
+                    movementTimer = 0f;
+
+                    if (isCrate(position + movement))
+                    {
+                        if (!isCrate(position + 2 * movement) &&
+                            !isWall(position + 2 * movement))
+                        {
+                            moveCrate(position + movement, position + 2 * movement);
+                            position = position + movement;
+                            nrMovements++;
+                        }
+                    }
+                    else if (!isWall(position + movement))
+                    {
+                        nrMovements++;
+                        position = position + movement;
+                    }
                 }
             }
-            else if (!isWall(position + movement))
-            {
-                position = position + movement;
-            }
-
             base.Update(gameTime);
         }
 
@@ -127,13 +172,19 @@ namespace Sokoban
         /// <param name="gameTime">Provides a snapshot of timing values.</param>
         protected override void Draw(GameTime gameTime)
         {
-            GraphicsDevice.Clear(Color.CornflowerBlue);
+            GraphicsDevice.Clear(Color.Black);
 
-            spriteBatch.Begin();
+            spriteBatch.Begin(transformMatrix: Matrix.CreateScale(scale));
+
+            spriteBatch.DrawString(arialBlack20,
+                 "Moves: " + nrMovements, new Vector2(10, height*size-5),
+                 Color.Yellow);
+
             for (int x = 0; x < width; x++)
             {
                 for (int y = 0; y < height; y++)
                 {
+                    spriteBatch.Draw(sand, new Vector2(x * size, y * size), Color.White);
                     switch (board[x,y])
                     {
                         case '.':
@@ -154,6 +205,25 @@ namespace Sokoban
             spriteBatch.Draw(sokoban, position * size, Color.White);
             spriteBatch.End();
 
+            if (win)
+            {
+                spriteBatch.Begin();
+                spriteBatch.Draw(pixel,
+                    new Rectangle(0, 0, GraphicsDevice.Viewport.Width,
+                                        GraphicsDevice.Viewport.Height),
+                    new Color(Color.Black, 0.5f));
+
+                Vector2 strSize = arialBlack20.MeasureString("YOU WIN!");
+                spriteBatch.DrawString(arialBlack20,
+                    "YOU WIN!",
+                    (new Vector2(GraphicsDevice.Viewport.Width,
+                    GraphicsDevice.Viewport.Height) - strSize) * 0.5f,
+                    Color.LightGreen);
+
+                spriteBatch.End();
+            }
+
+            
 
             base.Draw(gameTime);
         }
