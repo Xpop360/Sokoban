@@ -17,8 +17,7 @@ namespace Sokoban
         char[,] board;
         int width, height;
         int size = 64; // tamanho (largura e altura) das imagens usadas
-        Texture2D wall, crate, sokoban, point, sand, pixel;
-        Vector2 position; // sokoban position
+        Texture2D wall, crate, point, sand, pixel;
 
         float scale = 0.75f; // Escala 
         SpriteFont arialBlack20;
@@ -30,6 +29,7 @@ namespace Sokoban
 
         float movementTimer = 0f;
 
+        Sokoban sokoban;
 
         public Game1()
         {
@@ -53,7 +53,7 @@ namespace Sokoban
             height = board.GetLength(1);
 
             // remove Sokoban from board, and return coordinates
-            position = positionSokoban();
+            sokoban = new Sokoban(Content, positionSokoban());
 
             nrMovements = 0;
             win = false;
@@ -70,7 +70,6 @@ namespace Sokoban
 
             wall = Content.Load<Texture2D>("wall");
             crate = Content.Load<Texture2D>("crate");
-            sokoban = Content.Load<Texture2D>("sokoban");
             point = Content.Load<Texture2D>("point");
             sand = Content.Load<Texture2D>("sand");
 
@@ -103,6 +102,7 @@ namespace Sokoban
             KeyboardState keys = Keyboard.GetState();
             if (keys.IsKeyDown(Keys.R))
             {
+                if (win) curLevel = 1;
                 loadLevel();
             }
 
@@ -125,20 +125,22 @@ namespace Sokoban
                     // reset timer
                     movementTimer = 0f;
 
+                    Vector2 position = sokoban.Position();
                     if (isCrate(position + movement))
                     {
                         if (!isCrate(position + 2 * movement) &&
                             !isWall(position + 2 * movement))
                         {
                             moveCrate(position + movement, position + 2 * movement);
-                            position = position + movement;
+                            
+                            sokoban.Move(movement);
                             nrMovements++;
                         }
                     }
                     else if (!isWall(position + movement))
                     {
                         nrMovements++;
-                        position = position + movement;
+                        sokoban.Move(movement);
                     }
                 }
             }
@@ -202,7 +204,7 @@ namespace Sokoban
                     }
                 }
             }
-            spriteBatch.Draw(sokoban, position * size, Color.White);
+            sokoban.Draw(spriteBatch);
             spriteBatch.End();
 
             if (win)
